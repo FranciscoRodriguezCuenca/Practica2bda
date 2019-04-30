@@ -1,6 +1,7 @@
 # Práctica 2 Bases de Datos
 
 Francisco Rodríguez Cuenca y Alejandro Lozano Morales
+## 1. Importación del proyecto
 
 ## 2. Estudio de planes de consulta e índices.
 
@@ -194,6 +195,7 @@ CREATE INDEX fecha_idx ON game(game_id,date_time);
 
 ## 4. Estudio de índices en actualizaciones.
 
+### **a. Eliminar los índices creados en el apartado anterior manteniendo claves primarias y foráneas.**
 ### **b. Crear un atributo en la tabla “player_stats” que se denomine “puntuacion” que sea un número entero. El contenido de dicho atributo, para cada estadística de cada partido será un valor que se corresponderá con la suma de las cantidades de los atributos goals, shots y assists (es decir, en cada fila se sumarán los valores de esos atributos y se actualizará en el nuevo atributo “puntuación” con esa suma). Actualizar la tabla player_stats para que contenga dicha información tomando nota de su tiempo de ejecución.**
 
 ```sql
@@ -225,5 +227,231 @@ CREATE INDEX player_stats_idx ON player_stats( goals, shots, game_id, assists, p
 
 > La segunda tarda más ya que no es recomendable utilizar índices sobre un atributo que se debe actualizar a menudo, ya que para cada actualización se debe actualizar tanto la tabla como el índice.
 
+## 5. Desnormalización
 
+### **a. Eliminar los índices creados en el apartado anterior, manteniendo claves primarias y foráneas.**
 
+### **b. Crear una consulta que devuelva, para cada jugador su nombre, apellido, edad, total de asistencias (assists) y media de asistencias por partido, total de goles (goals) y media por partido para aquellos jugadores que tengan una edad entre 25 y 33 años.**
+
+````sql
+SELECT p.firstName, p.lastName, p.edad, p.goles, p.media_goles, SUM(ps.assists) AS Total_Asistencias, AVG(ps.assists) AS Media_Asistencias
+FROM player p
+	INNER JOIN player_stats ps ON p.player_id = ps.player_id
+WHERE p.edad BETWEEN 25 AND 33
+GROUP BY p.firstName, p.lastName, p.edad, p.goles, p.media_goles;
+````
+
+### **c. Aplicar la técnica de desnormalización que se considere más adecuada para acelerar la consulta del apartado 5.b, creando los scripts sql necesarios para modificar el esquema de la base de datos.**
+
+````sql
+CREATE TABLE `player_data` (
+`player_id` int(11) NOT NULL,
+`firstName` varchar(25) DEFAULT NULL,
+`lastName` varchar(25) DEFAULT NULL,
+`edad` int(11) DEFAULT NULL,
+`goles` int(11) DEFAULT NULL,
+`media_goles` decimal(10,5) DEFAULT NULL,
+`asistencias` int(11) DEFAULT NULL,
+`media_asistencias` float(11) DEFAULT NULL,
+PRIMARY KEY (`player_id`),
+CONSTRAINT `player_data_player_id` FOREIGN KEY (`player_id`) REFERENCES `player` (`player_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+````
+
+### **d. Crear un script que actualice los datos implicados en la desnormalización.**
+
+````sql
+INSERT INTO player_data
+(
+	SELECT p.player_id, p.firstName, p.lastName, p.edad, p.goles, p.media_goles, SUM(ps.assists), AVG(ps.assists)
+	FROM player p
+		INNER JOIN player_stats ps ON p.player_id = ps.player_id
+	GROUP BY p.player_id, p.firstName, p.lastName, p.edad, p.goles, p.media_goles
+);
+````
+### **e. Crear los triggers necesarios para mantener actualizados los datos implicados en la desnormalización.**
+
+````sql
+DELIMITER //
+
+CREATE TRIGGER
+player_insert_trigger AFTER INSERT
+ON player FOR EACH ROW
+BEGIN
+    INSERT INTO `practica2bda`.`player_data`(
+        `player_id`,
+        `firstName`,
+        `lastName`,
+        `edad`,
+        `goles`,
+        `media_goles`,
+        `asistencias`,
+        `media_asistencias`
+    )
+    VALUES(
+        NEW.player_id,
+        NEW.firstName,
+        NEW.lastName,
+        NEW.edad,
+        NEW.goles,
+        NEW.media_goles,
+        (
+            SELECT SUM(ps.assists)
+            FROM player_stats ps
+            WHERE player_id = NEW.player_id
+        ),
+        (
+            SELECT AVG(ps.assists)
+            FROM player_stats ps
+            WHERE player_id = NEW.player_id
+        )
+    );
+END; //
+
+DELIMITER ;
+````
+
+````sql
+DELIMITER //
+
+CREATE TRIGGER
+player_stats_insert_trigger AFTER INSERT
+ON player_stats FOR EACH ROW
+BEGIN
+	INSERT INTO `practica2bda`.`player_data`
+		(`asistencias`,
+        `media_asistencias`)
+	VALUES
+		(
+			(
+				SELECT SUM(ps.assists)
+				FROM player_stats ps
+				WHERE player_id = NEW.player_id
+			),
+			(
+				SELECT AVG(ps.assists)
+				FROM player_stats ps
+				WHERE player_id = NEW.player_id
+			)
+        );
+END; //
+
+DELIMITER ;
+````
+
+````sql
+DELIMITER //
+CREATE TRIGGER
+player_update_trigger AFTER UPDATE
+ON player FOR EACH ROW
+BEGIN
+	UPDATE `practica2bda`.`player_data`
+	SET
+		`player_id` = NEW.player_id,
+		`firstName` = (
+				SELECT firstName
+				FROM player
+				WHERE player_id = NEW.player_id
+        ),
+		`lastName` = (
+				SELECT lastName
+				FROM player
+				WHERE player_id = NEW.player_id
+        ),
+		`edad` = (
+				SELECT edad
+				FROM player
+				WHERE player_id = NEW.player_id
+        ),
+		`goles` = (
+				SELECT goles
+				FROM player
+				WHERE player_id = NEW.player_id
+        ),
+		`media_goles` = (
+				SELECT media_goles
+				FROM player
+				WHERE player_id = NEW.player_id
+        )
+	WHERE `player_id` = NEW.player_id;
+END; //
+
+DELIMITER ;
+````
+
+````sql
+DELIMITER //
+CREATE TRIGGER
+player_stats_update_trigger AFTER UPDATE
+ON player_stats FOR EACH ROW
+BEGIN
+	UPDATE `practica2bda`.`player_data`
+	SET
+		`asistencias` = (
+				SELECT SUM(ps.assists)
+				FROM player_stats ps
+				WHERE player_id = NEW.player_id
+			),
+		`media_asistencias` = (
+				SELECT AVG(ps.assists)
+				FROM player_stats ps
+				WHERE player_id = NEW.player_id
+			)
+	WHERE `player_id` = NEW.player_id;
+END; //
+
+DELIMITER ;
+````
+
+````sql
+DELIMITER //
+
+CREATE TRIGGER player_delete_trigger
+BEFORE DELETE
+   ON player FOR EACH ROW
+
+BEGIN
+
+   DELETE FROM player_data WHERE player_id = OLD.player_id;
+
+END; //
+
+DELIMITER ;
+````
+
+````sql
+DELIMITER //
+
+CREATE TRIGGER player_stats_delete_trigger
+BEFORE DELETE
+   ON player FOR EACH ROW
+
+BEGIN
+
+   UPDATE `practica2bda`.`player_data`
+	SET
+		`asistencias` = (
+				SELECT SUM(ps.assists)
+				FROM player_stats ps
+				WHERE player_id = OLD.player_id
+			),
+		`media_asistencias` = (
+				SELECT AVG(ps.assists)
+				FROM player_stats ps
+				WHERE player_id = OLD.player_id
+			)
+	WHERE `player_id` = OLD.player_id;
+
+END; //
+
+DELIMITER ;
+````
+
+### **f. Realizar la consulta 5.b sobre la base de datos desnormalizada. Estudiar coste y plan comparándolo con el obtenido en el apartado 5b.**
+
+#### Sin desnormalizar
+![5fA](5fA.png)
+#### Tras desnormalizar
+![5fA](5fB.png)
+
+>Las diferencias entre las dos consultas son evidentes: la primera debe consultar dos tablas y hacer el producto cartesiano mientras que la primera solo debe consultar una única tabla. La segunda por tanto es mucho más eficiente.
