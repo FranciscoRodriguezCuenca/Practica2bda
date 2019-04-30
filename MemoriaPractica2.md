@@ -452,6 +452,78 @@ DELIMITER ;
 #### Sin desnormalizar
 ![5fA](5fA.png)
 #### Tras desnormalizar
-![5fA](5fB.png)
+![5fB](5fB.png)
 
 >Las diferencias entre las dos consultas son evidentes: la primera debe consultar dos tablas y hacer el producto cartesiano mientras que la primera solo debe consultar una única tabla. La segunda por tanto es mucho más eficiente.
+
+## 6. Particionamiento.
+
+### a. Eliminar las claves foráneas con el script proporcionado “EliminarClavesForaneas.sql”.
+
+### b. Crear una consulta sql que obtenga, para cada jugador, su apellido, nombre, el número de partidos jugados y el número de jugadas realizadas por el jugador durante el año 2017. Estudiar coste y plan.
+
+````sql
+SELECT SQL_NO_CACHE p.lastName,p.firstName, TotPartidos.PartidosTot,TotJugadas.NumJugadas
+FROM player p,player_stats ps,game g,player_plays pp,
+    (	
+        SELECT p.player_id,COUNT(g.game_id) AS PartidosTot
+        FROM player_stats ps, game g,player p
+        WHERE ps.game_id=g.game_id
+        AND ps.player_id=p.player_id
+        GROUP BY p.player_id
+    )AS TotPartidos,
+    (	
+        SELECT p.player_id,COUNT(pp.play_id)AS NumJugadas
+        FROM player p,player_plays pp
+        WHERE pp.player_id=p.player_id
+        GROUP BY p.player_id
+    ) AS TotJugadas
+WHERE p.player_id=TotPartidos.player_id
+AND p.player_id=TotJugadas.player_id
+AND g.game_id=ps.game_id
+AND ps.player_id=p.player_id
+AND ps.player_id=pp.player_id
+AND YEAR(g.date_time)=2017
+GROUP BY p.lastName,p.firstName;
+````
+
+### **c. Razonar justificadamente (sin necesidad de implementarla realmente en SQL) una variante de la estructura existente realizando un particionamiento horizontal de los datos con el objeto de mejorar el tipo de consultas (con diferentes años) que se ha realizado en el apartado 6.ac.**
+
+> Se podría particionar la estructura, con diferentes particiones para cada año.
+
+### **d. Implementar en MySQL un particionamiento horizontal (mediante la sentencia ALTER TABLE …. PARTITION ….) que separe los datos de los partidos jugados en el año 2017 del resto. Realizar de nuevo la consulta 6.a y estudiar coste y plan comparándolo con lo obtenido en el apartado 6.a. Si se necesita modificar la clave primaria, hágase mediante la sentencia ALTER TABLE.**
+
+> Para poder realizar la particion correctamente necesitamos que date_time esté definido como clave en la tabla
+game, por lo que borramos la clave anterior y generamos una nueva compuesta por game_id y date_time
+
+````sql
+USE practica2bda;
+
+ALTER TABLE game DROP PRIMARY KEY;
+ALTER TABLE game ADD PRIMARY KEY (game_id,date_time);      
+
+ALTER TABLE game
+	PARTITION BY RANGE(YEAR(date_time))
+		(
+			PARTITION partAñosMenores VALUES LESS THAN(2017),
+			PARTITION part2017 VALUES LESS THAN (2018),
+			PARTITION partOtrosAños VALUES LESS THAN MAXVALUE
+        );
+````
+
+#### Sin particiones
+
+> Coste = 16821728159.36
+
+![6fA](6dA.png)
+
+#### Con particiones
+
+> Coste = 8443957714.90
+
+![6fB](6dB.png)
+
+> Esto significa que después de las particiones el coste de la consulta se reduce a la mitad. Esto se debe a que el número de filas del Full Index Scan de la tabla games se reduce de 267K a 5K.
+
+## 7. Establecer conclusiones generales de todo el presente trabajo.
+
