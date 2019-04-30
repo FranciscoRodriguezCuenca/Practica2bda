@@ -1,0 +1,3 @@
+Nosotros, en este caso realizariamos una particion de tipo RANGO (BY RANGE),donde dividiriamos los valores de la tabla en particiones
+según el valor del año, es decir para cado año una partición distinta. En este caso solo nos haría falta realizarla para el año 2017
+pero será más efectiva en futuras consultas si se realiza las particiones del resto de años.
