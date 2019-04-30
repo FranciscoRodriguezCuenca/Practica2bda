@@ -89,4 +89,108 @@ ON player_stats (player_id);
 
 > Se puede observar que la creación de índices no siempre acelera las consultas, pues pese a que en todos estos casos los índices mejoren la cantidad de filas seleccionadas de cada tabla, únicamente el caso con solo el índice player_stats_idx1 mejora marginalmente la complejidad.
 
-## 3. 
+## **3. Optimización de consultas y estudio de planes de consulta**
+
+### **a. Eliminar los índices creados en el apartado anterior, manteniendo claves primarias y foráneas.**
+
+### **b. Definir en SQL al menos dos sentencias diferentes que permitan obtener los datos de los equipos que hayan jugado más partidos en los últimos seis meses del año 2017, devolviendo los atributos: identificador del equipo, nombre del equipo, número de partidos jugados, total de tiros (tshots) realizados en esos seis meses, media de goles del equipo por partido.**
+
+#### Forma 1
+
+````sql
+SELECT SQL_NO_CACHE t.team_id,t.teamName,DatosGolesPartidos.media AS media_goles_partido,totaltiros.ttiros AS total_tiros,DatosGolesPartidos.PartidosTotales
+FROM game g, team t,team_stats st,
+	(
+        SELECT st.team_id,AVG(st.tgoals)as media,SUM(st.tgoals)AS GolesTotales,COUNT(g.game_id)AS PartidosTotales
+		FROM game g,team_stats st
+		WHERE g.game_id=st.game_id
+		AND g.date_time BETWEEN '2017-07-01' AND '2017-12-31'
+		GROUP BY st.team_id
+	) 
+	AS DatosGolesPartidos,
+    (
+		SELECT st.team_id,SUM(st.tshots) AS ttiros
+		FROM game g, team_stats st 
+		WHERE g.game_id=st.game_id
+		AND g.date_time BETWEEN '2017-07-01' AND '2017-12-31'
+		GROUP BY st.team_id
+    )AS totaltiros
+WHERE t.team_id=totaltiros.team_id
+	AND t.team_id=DatosGolesPartidos.team_id
+    AND g.game_id=st.game_id
+    AND  DatosGolesPartidos.PartidosTotales IN (
+        SELECT MAX(a.num_partidos) AS num_partidos
+        FROM (
+            SELECT st.team_id,COUNT(g.game_id) AS num_partidos
+            FROM team_stats st, game g
+            WHERE g.game_id=st.game_id
+                AND g.date_time BETWEEN '2017-07-01' AND '2017-12-31'
+            GROUP BY st.team_id
+        )AS a
+	)
+GROUP BY t.team_id,t.teamName;
+````
+
+#### Forma 2
+
+````sql
+SELECT SQL_NO_CACHE t.team_id,t.teamName,mediagoles.media AS media_goles_partido,totaltiros.ttiros AS total_tiros,COUNT(g.game_id) AS npartidos
+FROM game g, team t,team_stats st,
+    (
+        SELECT st.team_id,AVG(st.tgoals)as media
+        FROM game g,team_stats st
+        WHERE g.game_id=st.game_id
+        AND g.date_time BETWEEN '2017-07-01' AND '2017-12-31'
+        GROUP BY st.team_id
+    )AS mediagoles,
+    (
+        SELECT st.team_id,SUM(st.tshots) AS ttiros
+        FROM game g, team_stats st 
+        WHERE g.game_id=st.game_id
+        AND g.date_time BETWEEN '2017-07-01' AND '2017-12-31'
+        GROUP BY st.team_id
+    )AS totaltiros
+WHERE t.team_id=totaltiros.team_id 
+    AND t.team_id=mediagoles.team_id
+    AND g.game_id=st.game_id
+    AND g.date_time BETWEEN '2017-07-01' AND '2017-12-31'
+    AND t.team_id=st.team_id
+GROUP BY t.team_id,t.teamName,media_goles_partido,total_tiros
+HAVING COUNT(g.game_id) >= (
+    SELECT MAX(a.num_partidos) AS num_partidos
+    FROM (
+        SELECT st.team_id,COUNT(g.game_id) AS num_partidos
+        FROM team_stats st, game g
+        WHERE g.game_id=st.game_id
+            AND g.date_time BETWEEN '2017-07-01' AND '2017-12-31'
+        GROUP BY st.team_id
+    )AS a
+);
+````
+### **c. Crear los índices que permitan optimizar el coste de las consultas, analizando plan de consulta y coste para cada uno de los casos, justificando que solución es la más óptima.**
+
+````sql
+USE practica2bda;
+
+CREATE INDEX fecha_idx ON game(game_id,date_time);
+````
+#### Primera Consulta sin índices
+
+![3cA](3cA.png)
+
+#### Segunda Consulta sin índices
+
+![3cB](3cB.png)
+
+#### Primera Consulta con índices
+
+![3cC](3cC.png)
+
+#### Segunda Consulta con índices
+
+![3cD](3cD.png)
+
+> Debido a que las consultas utilizan tablas temporales,el único índice que puede mejorar ambas consultas es el de la fecha, atributo que se utiliza en varias subconsultas, si bien es cierto que no afecta al resultado final.
+
+
+
