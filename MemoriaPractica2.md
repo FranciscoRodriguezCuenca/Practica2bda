@@ -1,6 +1,6 @@
 # Práctica 2 Bases de Datos
-
-Francisco Rodríguez Cuenca y Alejandro Lozano Morales
+Francisco Rodríguez Cuenca (bn0171)
+Alejandro Lozano Morales (bn0203)
 ## 1. Importación del proyecto
 
 ## 2. Estudio de planes de consulta e índices.
@@ -527,3 +527,10 @@ ALTER TABLE game
 
 ## 7. Establecer conclusiones generales de todo el presente trabajo.
 
+Intentando ser lo más conciso posible, en este trabajo hemos podido comprobar y aprender sobre los matices que conlleva la aceleración de consultas. 
+
+Hemos podido ver que no hay soluciones rápidas, que existen multitud de opciones que utilizar para atacar el problema, desde la creación de índices hasta el particionamiento de tablas, pasando también por su desnormalización
+
+Para poder analizar las necesidades del problema y la efectividad de las soluciones nos hemos podido ejercitar además en el análisis de planes de consulta, y nos hemos dado cuenta de su indispensabilidad.
+
+Así que en conclusión, la optimización de consultas y scripts sql es una labor especializada que no tiene soluciones rápidas y en la cual es necesaria un dominio del tema y un análisis profundo del problema.
