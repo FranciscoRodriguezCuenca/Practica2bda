@@ -190,7 +190,40 @@ CREATE INDEX fecha_idx ON game(game_id,date_time);
 
 ![3cD](3cD.png)
 
-> Debido a que las consultas utilizan tablas temporales,el único índice que puede mejorar ambas consultas es el de la fecha, atributo que se utiliza en varias subconsultas, si bien es cierto que no afecta al resultado final.
+> Debido a que las consultas utilizan tablas temporales,el único índice que puede mejorar ambas consultas es el de la fecha, atributo que se utiliza en varias subconsultas, si bien es cierto que no modifica mucho al resultado final.
+
+## 4. Estudio de índices en actualizaciones.
+
+### **b. Crear un atributo en la tabla “player_stats” que se denomine “puntuacion” que sea un número entero. El contenido de dicho atributo, para cada estadística de cada partido será un valor que se corresponderá con la suma de las cantidades de los atributos goals, shots y assists (es decir, en cada fila se sumarán los valores de esos atributos y se actualizará en el nuevo atributo “puntuación” con esa suma). Actualizar la tabla player_stats para que contenga dicha información tomando nota de su tiempo de ejecución.**
+
+```sql
+ALTER TABLE player_stats
+ADD puntuacion integer;
+
+UPDATE player_stats
+SET puntuacion=(assists)+(goals)+(shots);
+```
+
+> Tiempo de ejecución: 7,985 segundos
+
+### **c. Volver a actualizar a null el atributo puntuación en todas las filas**
+
+````sql
+UPDATE player_stats
+SET puntuacion=NULL;
+````
+
+### **d. Por preverse un tipo de consultas con ordenación muy complicada, se desea crear un índice en la tabla “player_stats” por los atributos goals, shots, game_id, assists, player_id y puntuación, en ese orden. Crear el índice.**
+
+````sql
+CREATE INDEX player_stats_idx ON player_stats( goals, shots, game_id, assists, player_id,puntuacion);
+````
+
+### **e. Volver a ejecutar la sentencia que establece los valores del atributo puntuación a la suma comentada anteriormente. Comprobar tiempo de ejecución y compararlo razonadamente con el obtenido en el punto 4.b.**
+
+> Tiempo de ejecución : 19.343 sec
+
+> La segunda tarda más ya que no es recomendable utilizar índices sobre un atributo que se debe actualizar a menudo, ya que para cada actualización se debe actualizar tanto la tabla como el índice.
 
 
 
